@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from .auth import configure_login
 from .gemini_client import GeminiProvider
 from .groq_client import GroqProvider
 from .models import PROVIDERS, Annotation, Control, DebateConfig
@@ -22,7 +23,18 @@ def create_app(
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        storage = Storage(database_path or os.getenv("DATABASE_PATH", "data/debates.sqlite3"))
+        storage_backend = os.getenv("STORAGE_BACKEND", "sqlite")
+        if database_path is not None or storage_backend == "sqlite":
+            storage = Storage(database_path or os.getenv("DATABASE_PATH", "data/debates.sqlite3"))
+        elif storage_backend == "azure-blob":
+            from .blob_storage import BlobStorage
+
+            storage = BlobStorage(
+                os.environ["AZURE_STORAGE_ACCOUNT_URL"],
+                os.getenv("AZURE_STORAGE_CONTAINER", "debates"),
+            )
+        else:
+            raise ValueError("Unsupported STORAGE_BACKEND")
         storage.recover(now())
         providers = (
             provider
@@ -41,6 +53,11 @@ def create_app(
             storage.close()
 
     app = FastAPI(title="llm-debate", version="1.0.0", lifespan=lifespan)
+    configure_login(app)
+
+    @app.get("/healthz", include_in_schema=False)
+    async def liveness():
+        return {"status": "ok"}
 
     @app.exception_handler(KeyError)
     async def missing_record(request: Request, error: KeyError):

@@ -1,0 +1,69 @@
+name: Demo service - start or stop
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Start a two-hour demo, or stop the service
+        required: true
+        default: start
+        type: choice
+        options: [start, stop]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+permissions:
+  contents: read
+jobs:
+  authorize:
+    if: github.ref == 'refs/heads/main' && fromJSON(vars.AZURE_CONFIG || '{}').DEMO_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      action: ${{ steps.request.outputs.action }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check caller and exact command
+        id: request
+        env:
+          DEMO_OPERATORS: ${{ fromJSON(vars.AZURE_CONFIG || '{}').DEMO_OPERATORS }}
+          DEMO_CONTROL_ISSUE: ${{ fromJSON(vars.AZURE_CONFIG || '{}').DEMO_CONTROL_ISSUE }}
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            echo 'action=reap' >> "$GITHUB_OUTPUT"
+          else
+            python3 deploy/azure/power_request.py
+          fi
+  power:
+    needs: authorize
+    if: needs.authorize.outputs.action != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: demo-power
+    concurrency:
+      group: azure-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_SUBSCRIPTION_ID: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_RESOURCE_GROUP }}
+      AZURE_CONTAINER_APP: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_CONTAINER_APP }}
+      DEMO_ACTION: ${{ needs.authorize.outputs.action }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: azure/login@935127ca5bb3c4b02c9c2c10060028383878f33f # v3
+        with:
+          client-id: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_POWER_CLIENT_ID }}
+          tenant-id: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_TENANT_ID }}
+          subscription-id: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_SUBSCRIPTION_ID }}
+      - name: Control Container App
+        run: python3 deploy/azure/container_power.py "$DEMO_ACTION"
+
+

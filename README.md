@@ -230,20 +230,61 @@ Klucze są wczytywane ze zmiennych środowiskowych `GROQ_API_KEY` i `GEMINI_API_
 
 Wymagane są Docker z obsługą Docker Compose, połączenie z internetem oraz klucz API Groq lub Gemini.
 
-1. Skopiować `.env.example` do `.env` i uzupełnić `GROQ_API_KEY`, `GEMINI_API_KEY` lub oba. Klucz Gemini można utworzyć w [Google AI Studio](https://aistudio.google.com/apikey).
+1. Skopiować `.env.example` do `.env` i uzupełnić `GROQ_API_KEY`, `GEMINI_API_KEY` lub oba oraz `APP_USERNAME` i `APP_PASSWORD` do wspólnego logowania. Użyć długiego, losowego hasła. Klucz Gemini można utworzyć w [Google AI Studio](https://aistudio.google.com/apikey).
 2. W katalogu repozytorium uruchomić:
 
    ```sh
    docker compose up --build
    ```
 
-3. Otworzyć `http://localhost:8000` w przeglądarce.
+3. Otworzyć `http://localhost:8000` w przeglądarce i podać login oraz hasło w oknie przeglądarki.
 
 Zatrzymanie aplikacji poleceniem `docker compose down` zachowuje zapisane debaty w woluminie.
 
 Po zmianie kluczy w `.env` należy wykonać `docker compose up -d --force-recreate`. Sam restart kontenera nie wczytuje zmiennych ponownie. Bez kluczy dostępne są formularze, podgląd instrukcji, historia i eksport; uruchamianie debat jest zablokowane. Brak klucza Gemini nie blokuje debat Groq i odwrotnie.
 
 Stan kontenera można sprawdzić przez `docker compose ps`, a logi przez `docker compose logs -f app`. Dokumentacja lokalnego API jest dostępna pod adresem `http://localhost:8000/docs`.
+
+### Wspólne logowanie i hosting w Azure
+
+Automatyczne testowanie i wdrażanie przez GitHub Actions opisano w
+[instrukcji wdrożenia Azure](deploy/azure/README.md). Workflow jest gotowy w
+`.github/workflows/deploy-azure.yml`; wdrażanie wymaga jednorazowego przygotowania
+Container App, rejestru ACR, prywatnego Blob Storage i tożsamości OIDC oraz
+ustawienia `DEPLOY_ENABLED=true` i `DEMO_ENABLED=true` w GitHub.
+
+Aplikacja obsługuje jedno wspólne konto przez HTTP Basic Auth. Przeglądarka
+wyświetla własne okno logowania, a następnie automatycznie uwierzytelnia żądania
+API, eksporty i strumienie SSE. Ochrona obejmuje także pliki interfejsu,
+`/docs`, `/openapi.json` oraz `/api/health`.
+
+- `APP_USERNAME`: wspólny login, bez dwukropka.
+- `APP_PASSWORD`: długie, losowe hasło; inne niż klucze dostawców LLM.
+- `AUTH_REQUIRED=true`: wymaga obu wartości i przerywa start przy braku konfiguracji.
+  Obraz Dockera i Docker Compose ustawiają tę opcję automatycznie. W Azure
+  zachować `AUTH_REQUIRED=true` i ustawić login oraz hasło.
+
+W Azure ustawić te zmienne oraz `GROQ_API_KEY` i/lub `GEMINI_API_KEY` jako sekrety
+środowiska uruchomieniowego. Nie przekazywać ich podczas budowania obrazu ani do
+frontendu. Wymusić HTTPS na publicznym adresie i nie udostępniać bezpośrednio portu
+HTTP kontenera. Lokalny HTTP służy wyłącznie do pracy na `localhost`.
+
+Jedyny publiczny endpoint aplikacji to `GET /healthz`, zwracający wyłącznie
+`{"status":"ok"}`. Użyć go do sond Azure; nie ujawnia konfiguracji ani debat.
+Wdrożenie wymaga jednego procesu i jednej instancji. W Azure używa prywatnego
+Blob Storage (`STORAGE_BACKEND=azure-blob`), dzięki czemu dane pozostają po
+zatrzymaniu aplikacji. Lokalnie używa SQLite WAL; nie umieszczać tej bazy na
+udziale Azure Files. Nie skalować aplikacji do wielu replik.
+
+Po zmianie loginu lub hasła odtworzyć kontener przez
+`docker compose up -d --force-recreate`. Przeglądarka zapamiętuje Basic Auth;
+aplikacja nie ma przycisku wylogowania. Na współdzielonym komputerze używać
+okna prywatnego i zamknąć wszystkie okna prywatne po demonstracji. Konto daje
+obu osobom te same uprawnienia do uruchamiania, odczytu i usuwania debat.
+
+Przy lokalnym uruchomieniu backendu bez Dockera logowanie jest opcjonalne:
+brak obu zmiennych i brak `AUTH_REQUIRED=true` zachowuje dotychczasowy tryb
+deweloperski. Podanie choć jednej zmiennej wymaga poprawnego kompletu danych.
 
 ### Limity i błędy
 

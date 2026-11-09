@@ -1,0 +1,84 @@
+name: Test and deploy to Azure
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: azure-production
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Backend tests and lint
+        run: |
+          docker run --rm -v "$PWD/backend:/work" -w /work python:3.13-slim-bookworm \
+            sh -ec 'pip install -r requirements.lock "pytest>=8,<10" "pytest-asyncio>=0.25,<2" "ruff>=0.11,<1"; python -m pytest -q; ruff check app tests'
+      - name: Deployment tests
+        run: python3 -m unittest discover -s deploy/azure -p 'test_*.py'
+      - name: Build application
+        run: docker build --tag llm-debate:check .
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main' && fromJSON(vars.AZURE_CONFIG || '{}').DEPLOY_ENABLED == 'true' && fromJSON(vars.AZURE_CONFIG || '{}').DEMO_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_SUBSCRIPTION_ID: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_RESOURCE_GROUP }}
+      AZURE_CONTAINER_APP: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_CONTAINER_APP }}
+      AZURE_ACR_NAME: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_ACR_NAME }}
+      AZURE_STORAGE_ACCOUNT_URL: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_STORAGE_ACCOUNT_URL }}
+      AZURE_RUNTIME_IDENTITY_ID: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_RUNTIME_IDENTITY_ID }}
+      AZURE_RUNTIME_CLIENT_ID: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_RUNTIME_CLIENT_ID }}
+      APP_DOMAIN: ${{ fromJSON(vars.AZURE_CONFIG || '{}').APP_DOMAIN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Authenticate with GitHub OIDC
+        uses: azure/login@935127ca5bb3c4b02c9c2c10060028383878f33f # v3
+        with:
+          client-id: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_CLIENT_ID }}
+          tenant-id: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_TENANT_ID }}
+          subscription-id: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_SUBSCRIPTION_ID }}
+      - name: Build and push private image
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AZURE_ACR_NAME:?Set AZURE_ACR_NAME}"
+          registry=$(az acr show --name "$AZURE_ACR_NAME" --query loginServer -o tsv)
+          az acr login --name "$AZURE_ACR_NAME" --output none
+          image="$registry/llm-debate:$GITHUB_SHA"
+          docker build --tag "$image" .
+          docker push "$image"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$image")
+          echo "APP_IMAGE=$digest" >> "$GITHUB_ENV"
+      - name: Deploy existing Container App
+        run: python3 deploy/azure/container_deploy.py
+      - name: Verify HTTPS and login protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${APP_DOMAIN:?Set APP_DOMAIN}"
+          curl --fail --silent --show-error --retry 30 --retry-all-errors \
+            --retry-delay 10 "https://$APP_DOMAIN/healthz"
+          for path in / /api/debates /api/health /docs; do
+            status=$(curl --silent --show-error -o /dev/null -w '%{http_code}' "https://$APP_DOMAIN$path")
+            test "$status" = 401 || { echo "Expected login challenge; received $status"; exit 1; }
+          done
+      - name: Stop on deployment or verification failure
+        if: failure()
+        run: python3 deploy/azure/container_power.py stop
+
+
