@@ -58,6 +58,19 @@ class ContainerDeploymentTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 configuration({}, image, url, RUNTIME, "client")
 
+    def test_runtime_identity_is_not_duplicated_when_azure_changes_id_case(self):
+        current = {
+            "identity": {"type": "UserAssigned", "userAssignedIdentities": {
+                RUNTIME.lower(): {"clientId": "existing-client-id"},
+            }},
+            "properties": {"configuration": {"ingress": {"targetPort": 8000}}},
+        }
+        result = configuration(current, IMAGE, "https://example.blob.core.windows.net",
+                               RUNTIME, "client")
+        identities = result["identity"]["userAssignedIdentities"]
+        self.assertEqual(len(identities), 1)
+        self.assertEqual(identities[RUNTIME], {})
+
 
 class ContainerPowerTests(unittest.TestCase):
     def setUp(self):

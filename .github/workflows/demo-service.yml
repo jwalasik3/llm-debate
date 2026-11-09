@@ -3,15 +3,13 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: Start a two-hour demo, or stop the service
+        description: Start the demo (stop manually after use), or stop the service
         required: true
         default: start
         type: choice
         options: [start, stop]
   issue_comment:
     types: [created]
-  schedule:
-    - cron: '7,22,37,52 * * * *'
 permissions:
   contents: read
 jobs:
@@ -32,11 +30,7 @@ jobs:
           DEMO_CONTROL_ISSUE: ${{ fromJSON(vars.AZURE_CONFIG || '{}').DEMO_CONTROL_ISSUE }}
         shell: bash
         run: |
-          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
-            echo 'action=reap' >> "$GITHUB_OUTPUT"
-          else
-            python3 deploy/azure/power_request.py
-          fi
+          python3 deploy/azure/power_request.py
   power:
     needs: authorize
     if: needs.authorize.outputs.action != ''

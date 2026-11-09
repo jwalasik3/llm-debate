@@ -81,7 +81,7 @@ def power(action, *, now=None):
     wait_status(url, "Running" if action == "start" else "Stopped")
     print(f"Container App {action} completed.")
     if action == "start":
-        print(f"Session expires at {deadline.isoformat()}; scheduled cleanup is best effort.")
+        print(f"Intended session end: {deadline.isoformat()}. Stop the app manually after use.")
 
 
 if __name__ == "__main__":

@@ -46,7 +46,7 @@ Enter new authentication credentials yourself when browser automation hands cont
 ## GitHub setup
 
 Create environments `production` and `demo-power`, restricted to `main`.
-Do not require manual environment approval for `demo-power`: scheduled cleanup must be able to run.
+Configure any environment approvals according to who should operate the demo.
 Only trusted maintainers should have permission to modify workflows or environment settings.
 
 Create one repository Actions variable named `AZURE_CONFIG`, containing a JSON object
@@ -65,19 +65,19 @@ Include these additional keys in the same `AZURE_CONFIG` JSON object (values are
 
 | Variable | Value |
 | --- | --- |
-| `DEPLOY_ENABLED` | `true` when Azure, secrets and cleanup are ready |
+| `DEPLOY_ENABLED` | `true` when Azure and secrets are ready |
 | `DEMO_ENABLED` | `true` before enabling deployment |
 | `DEMO_OPERATORS` | Comma-separated GitHub logins, including your own `jwalasik3` |
 | `DEMO_CONTROL_ISSUE` | Number of the dedicated control issue, if using comment commands |
 
-No Azure client secret or LLM key is needed in GitHub. Before enabling deployment,
-ensure scheduled Actions are enabled in the fork; forks may have schedules disabled by default.
+No Azure client secret or LLM key is needed in GitHub.
+Scheduled Actions checks are disabled to avoid recurring workflow usage.
 
 ## Deployment and use
 
 Push to `main` or run **Test and deploy to Azure** manually. It tests, builds and pushes
 an immutable image, checks runtime secret names, stops the previous engine, updates port 8000,
-HTTPS, probes, identity and secret references, then starts a two-hour session.
+HTTPS, probes, identity and secret references, waits for Azure provisioning, then starts the app.
 It verifies `/healthz` and checks that application endpoints challenge anonymous requests.
 A failed deployment/verification attempts to stop the app. It does not automatically roll back.
 
@@ -86,10 +86,9 @@ Maintainers need repository write access for manual runs. Allowlisted classmates
 access can instead post exactly `/demo start` or `/demo stop` on the control issue.
 Do not grant classmates workflow-editing permissions just to operate the demo.
 
-Start extends expiry to two hours from the latest start, no later than 1 January 2027 UTC.
-A scheduled job checks expiry approximately every 15 minutes. Missing/invalid expiry fails closed.
-GitHub schedules can be delayed or disabled, so automatic stop is best effort and not a spending cap.
-Stop manually after demos and verify **Stopped** in Azure. Starts after 31 December 2026 are rejected
+Start records an intended end two hours ahead, no later than 1 January 2027 UTC.
+There is no automatic shutdown while scheduled checks are disabled: the tag is informational.
+Stop manually after every demo and verify **Stopped** in Azure. Starts after 31 December 2026 are rejected
 according to the UTC cutoff in `container_power.py`.
 
 ## Data and background debates

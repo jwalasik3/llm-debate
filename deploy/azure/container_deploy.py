@@ -64,8 +64,12 @@ def configuration(current, image, account_url, runtime_id, runtime_client_id, pr
     identity["type"] = (
         "SystemAssigned,UserAssigned" if "SystemAssigned" in identity["type"] else "UserAssigned"
     )
-    identity.setdefault("userAssignedIdentities", {})[runtime_id] = {}
-    identity["userAssignedIdentities"] = {key: {} for key in identity["userAssignedIdentities"]}
+    # ARM treats resource IDs case-insensitively; GET may change their capitalization.
+    identity["userAssignedIdentities"] = {
+        key: {} for key in identity.get("userAssignedIdentities", {})
+        if key.casefold() != runtime_id.casefold()
+    }
+    identity["userAssignedIdentities"][runtime_id] = {}
     identity.pop("principalId", None)
     identity.pop("tenantId", None)
     return {"identity": identity, "properties": {"configuration": config, "template": template}}
