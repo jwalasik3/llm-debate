@@ -13,6 +13,13 @@
       "type": "string",
       "defaultValue": "jwalasik3/llm-debate"
     },
+    "oidcSubjectPrefix": {
+      "type": "string",
+      "defaultValue": "repo:jwalasik3@119112221/llm-debate@1451692272",
+      "metadata": {
+        "description": "Exact immutable subject prefix from GitHub's OIDC token, before :environment:."
+      }
+    },
     "appName": {
       "type": "string",
       "defaultValue": "llm-debate"
@@ -46,7 +53,7 @@
       ],
       "properties": {
         "issuer": "https://token.actions.githubusercontent.com",
-        "subject": "[concat('repo:', parameters('repository'), ':environment:production')]",
+        "subject": "[concat(parameters('oidcSubjectPrefix'), ':environment:production')]",
         "audiences": [
           "api://AzureADTokenExchange"
         ]
@@ -67,7 +74,7 @@
       ],
       "properties": {
         "issuer": "https://token.actions.githubusercontent.com",
-        "subject": "[concat('repo:', parameters('repository'), ':environment:demo-power')]",
+        "subject": "[concat(parameters('oidcSubjectPrefix'), ':environment:demo-power')]",
         "audiences": [
           "api://AzureADTokenExchange"
         ]

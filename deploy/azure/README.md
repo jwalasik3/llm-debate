@@ -8,6 +8,11 @@ Keep the Azure for Students spending limit enabled.
 
 Deploy `container-bootstrap.json` to the existing `llm-debate` resource group,
 with repository `jwalasik3/llm-debate` and location `francecentral`.
+The `oidcSubjectPrefix` parameter must match GitHub's token exactly. This fork uses
+`repo:jwalasik3@119112221/llm-debate@1451692272`, including immutable owner/repository IDs.
+The two federated credentials append `:environment:production` and `:environment:demo-power`.
+New GitHub repositories use this format; name-only subjects do not match their tokens.
+See [GitHub's OIDC reference](https://docs.github.com/en/actions/reference/security/oidc#immutable-subject-claims).
 Review permissions and costs before creating resources. It creates:
 
 - A Basic Azure Container Registry: private images, with an ongoing registry charge even while the app is stopped.
