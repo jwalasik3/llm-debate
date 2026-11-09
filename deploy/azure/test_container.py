@@ -4,7 +4,7 @@ import unittest
 from datetime import UTC, datetime
 from unittest.mock import patch
 
-from container_deploy import configuration
+from container_deploy import configuration, wait_for_update
 from container_power import power
 
 IMAGE = "example.azurecr.io/llm-debate@sha256:" + "a" * 64
@@ -12,6 +12,23 @@ RUNTIME = "/subscriptions/test/resourceGroups/demo/providers/Microsoft.ManagedId
 
 
 class ContainerDeploymentTests(unittest.TestCase):
+    @patch("container_deploy.time.sleep")
+    @patch("container_deploy.az")
+    def test_waits_for_azure_update_before_allowing_start(self, az, sleep):
+        az.side_effect = [
+            {"properties": {"provisioningState": "InProgress"}},
+            {"properties": {"provisioningState": "Succeeded"}},
+        ]
+        self.assertEqual(wait_for_update("https://example")["properties"]["provisioningState"],
+                         "Succeeded")
+        sleep.assert_called_once_with(5)
+        az.side_effect = None
+        az.return_value = {"properties": {"provisioningState": "Failed"}}
+        with self.assertRaises(RuntimeError):
+            wait_for_update("https://example")
+        # A previous failed release must not prevent a corrected release from being applied.
+        self.assertEqual(wait_for_update("https://example", allow_failed=True), az.return_value)
+
     def test_release_uses_persistent_storage_secret_refs_and_one_worker_instance(self):
         current = {"properties": {"configuration": {
             "secrets": [{"name": "app-password", "value": "never-copy-this"}],

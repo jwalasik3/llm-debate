@@ -3,9 +3,22 @@
 import json
 import os
 import re
+import time
 from pathlib import Path
 
 from container_power import API, az, power, resource_url
+
+
+def wait_for_update(url, *, allow_failed=False):
+    for _ in range(120):
+        current = az("rest", "--method", "get", "--url", f"{url}?api-version={API}")
+        status = current["properties"].get("provisioningState")
+        if status == "Succeeded" or (allow_failed and status in {"Failed", "Canceled"}):
+            return current
+        if status in {"Failed", "Canceled"}:
+            raise RuntimeError(f"Container App update {status}; inspect Azure activity logs")
+        time.sleep(5)
+    raise RuntimeError("Timed out waiting for Container App configuration update")
 
 
 def configuration(current, image, account_url, runtime_id, runtime_client_id, providers=None):
@@ -60,7 +73,7 @@ def configuration(current, image, account_url, runtime_id, runtime_client_id, pr
 
 def main():
     url = resource_url()
-    current = az("rest", "--method", "get", "--url", f"{url}?api-version={API}")
+    current = wait_for_update(url, allow_failed=True)
     secrets = az("rest", "--method", "post", "--url", f"{url}/listSecrets?api-version={API}")
     available = {secret["name"] for secret in secrets["value"]}
     providers = {name for name in ("groq", "gemini") if f"{name}-api-key" in available}
@@ -72,10 +85,12 @@ def main():
     )
     # Drain/stop the old engine first: it must not run beside a replacement engine.
     power("stop")
+    wait_for_update(url, allow_failed=True)
     release = Path(os.environ.get("RUNNER_TEMP", ".")) / "container-release.json"
     release.write_text(json.dumps(body))
     az("rest", "--method", "patch", "--url", f"{url}?api-version={API}",
        "--body", f"@{release}")
+    wait_for_update(url)
     power("start")
 
 
