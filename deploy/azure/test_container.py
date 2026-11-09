@@ -84,14 +84,25 @@ class ContainerPowerTests(unittest.TestCase):
     @patch("container_power.wait_status")
     @patch("container_power.az")
     def test_records_expiry_before_start_and_blocks_start_on_tag_failure(self, az, wait):
+        stopped = {"properties": {"runningStatus": "Stopped"}}
+        az.return_value = stopped
         power("start", now=datetime(2026, 11, 9, tzinfo=UTC))
-        self.assertIn('2026-11-09T02:00:00+00:00', str(az.call_args_list[0]))
-        self.assertIn('/start?', str(az.call_args_list[1]))
+        self.assertIn('2026-11-09T02:00:00+00:00', str(az.call_args_list[1]))
+        self.assertIn('/start?', str(az.call_args_list[2]))
         az.reset_mock()
-        az.side_effect = RuntimeError("tag write denied")
+        az.side_effect = [stopped, RuntimeError("tag write denied")]
         with self.assertRaises(RuntimeError):
             power("start", now=datetime(2026, 11, 9, tzinfo=UTC))
+        self.assertEqual(az.call_count, 2)
+
+    @patch("container_power.wait_status")
+    @patch("container_power.az")
+    def test_starting_running_app_succeeds_without_mutating_azure(self, az, wait):
+        az.return_value = {"properties": {"runningStatus": "Running"}}
+        power("start", now=datetime(2026, 11, 9, tzinfo=UTC))
         self.assertEqual(az.call_count, 1)
+        self.assertIn("get", az.call_args.args)
+        wait.assert_not_called()
 
     @patch("container_power.az")
     def test_no_starts_after_semester(self, az):

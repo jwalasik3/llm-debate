@@ -51,6 +51,10 @@ def power(action, *, now=None):
     if action == "start":
         if now >= SEMESTER_END:
             raise ValueError("Demo hosting ended on 31 December 2026")
+        state = az("rest", "--method", "get", "--url", f"{url}?api-version={API}")
+        if state["properties"].get("runningStatus") == "Running":
+            print("Container App is already running. Stop the app manually after use.")
+            return
         deadline = min(now + timedelta(hours=2), SEMESTER_END)
         # Record expiration before starting. A failed tag update blocks start.
         az("rest", "--method", "patch", "--url",

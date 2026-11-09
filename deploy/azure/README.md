@@ -82,6 +82,7 @@ It verifies `/healthz` and checks that application endpoints challenge anonymous
 A failed deployment/verification attempts to stop the app. It does not automatically roll back.
 
 Use **Demo service - start or stop** → **Run workflow** → `start` / `stop` on `main`.
+Start succeeds without changes if the app is already running; Stop does the same if already stopped.
 Maintainers need repository write access for manual runs. Allowlisted classmates with issue-comment
 access can instead post exactly `/demo start` or `/demo stop` on the control issue.
 Do not grant classmates workflow-editing permissions just to operate the demo.
