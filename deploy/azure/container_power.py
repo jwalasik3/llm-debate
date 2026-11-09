@@ -16,8 +16,11 @@ SEMESTER_END = datetime(2027, 1, 1, tzinfo=UTC)
 def az(*args):
     result = subprocess.run(
         ["az", *args, "--output", "json", "--only-show-errors"],
-        check=True, capture_output=True, text=True,
+        capture_output=True, text=True,
     )
+    if result.returncode:
+        # Do not print stdout: listSecrets responses can contain runtime credentials.
+        raise RuntimeError(f"Azure CLI request failed: {result.stderr.strip()}")
     return json.loads(result.stdout) if result.stdout.strip() else {}
 
 
@@ -44,6 +47,7 @@ def wait_status(url, target):
 def power(action, *, now=None):
     now = now or datetime.now(UTC)
     url = resource_url()
+    state = None
     if action == "start":
         if now >= SEMESTER_END:
             raise ValueError("Demo hosting ended on 31 December 2026")
@@ -68,6 +72,11 @@ def power(action, *, now=None):
         action = "stop"
     elif action != "stop":
         raise ValueError("Expected start, stop, or reap")
+    if action == "stop":
+        state = state or az("rest", "--method", "get", "--url", f"{url}?api-version={API}")
+        if state["properties"].get("runningStatus") == "Stopped":
+            print("Container App is already stopped.")
+            return
     az("rest", "--method", "post", "--url", f"{url}/{action}?api-version={API}")
     wait_status(url, "Running" if action == "start" else "Stopped")
     print(f"Container App {action} completed.")

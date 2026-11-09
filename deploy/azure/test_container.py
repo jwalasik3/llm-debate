@@ -69,6 +69,13 @@ class ContainerPowerTests(unittest.TestCase):
             power("start", now=datetime(2027, 1, 1, tzinfo=UTC))
         az.assert_not_called()
 
+    @patch("container_power.az")
+    def test_stopping_stopped_app_is_idempotent(self, az):
+        az.return_value = {"properties": {"runningStatus": "Stopped"}}
+        power("stop")
+        self.assertEqual(az.call_count, 1)
+        self.assertIn("get", az.call_args.args)
+
     @patch("container_power.wait_status")
     @patch("container_power.az")
     def test_reap_stops_expired_and_missing_expiry_but_preserves_live_session(self, az, wait):
