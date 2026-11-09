@@ -44,7 +44,6 @@ def configuration(current, image, account_url, runtime_id, runtime_client_id, pr
             } for kind, failures in [("Startup", 30), ("Readiness", 3)]],
         }],
         "scale": {"minReplicas": 1, "maxReplicas": 1},
-        "terminationGracePeriodSeconds": 30,
     }
     # Secrets are never copied to the release file: PATCH preserves existing secrets.
     config.pop("secrets", None)
