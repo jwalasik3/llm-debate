@@ -57,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           : "${AZURE_ACR_NAME:?Set AZURE_ACR_NAME}"
-          registry=$(az acr show --name "$AZURE_ACR_NAME" --query loginServer -o tsv)
+          registry="$AZURE_ACR_NAME.azurecr.io"
           az acr login --name "$AZURE_ACR_NAME" --output none
           image="$registry/llm-debate:$GITHUB_SHA"
           docker build --tag "$image" .
@@ -65,8 +65,10 @@ jobs:
           digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$image")
           echo "APP_IMAGE=$digest" >> "$GITHUB_ENV"
       - name: Deploy existing Container App
+        id: release
         run: python3 deploy/azure/container_deploy.py
       - name: Verify HTTPS and login protection
+        id: verify
         shell: bash
         run: |
           set -euo pipefail
@@ -78,7 +80,5 @@ jobs:
             test "$status" = 401 || { echo "Expected login challenge; received $status"; exit 1; }
           done
       - name: Stop on deployment or verification failure
-        if: failure()
+        if: failure() && (steps.release.outcome == 'failure' || steps.verify.outcome == 'failure')
         run: python3 deploy/azure/container_power.py stop
-
-

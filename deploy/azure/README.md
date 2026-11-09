@@ -98,4 +98,3 @@ stale writers. An interrupted debate is marked interrupted after restart; it doe
 Local development still uses SQLite WAL. Never mount that database on Azure Files.
 Blob storage is synchronous and intended for small college demos; startup loads saved snapshots
 into memory. Large histories or high traffic require a different storage design.
-

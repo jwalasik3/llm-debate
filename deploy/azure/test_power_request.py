@@ -42,6 +42,3 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(self.request(event, "workflow_dispatch"), "start")
         event["inputs"]["action"] = "delete"
         self.assertEqual(self.request(event, "workflow_dispatch"), "")
-
-
-

@@ -65,5 +65,3 @@ jobs:
           subscription-id: ${{ fromJSON(vars.AZURE_CONFIG || '{}').AZURE_SUBSCRIPTION_ID }}
       - name: Control Container App
         run: python3 deploy/azure/container_power.py "$DEMO_ACTION"
-
-
