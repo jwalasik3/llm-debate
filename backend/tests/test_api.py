@@ -83,14 +83,18 @@ def test_deleting_archive_does_not_interrupt_another_debate(tmp_path):
         assert [item["id"] for item in client.get("/api/debates").json()] == [active_id]
 
 
-def test_missing_key_and_static_frontend(tmp_path):
+def test_missing_key_and_static_frontend(tmp_path, monkeypatch):
     provider = FakeProvider()
     provider.configured = False
     dist = tmp_path / "dist"
     dist.mkdir()
     (dist / "index.html").write_text("<h1>Test</h1>")
-    with TestClient(create_app(str(tmp_path / "db"), provider, str(dist))) as client:
-        assert client.get("/").status_code == 200
+    (dist / "assets").mkdir()
+    (dist / "assets" / "app.js").write_text("// frontend asset")
+    monkeypatch.setenv("FRONTEND_DIST", str(dist))
+    with TestClient(create_app(str(tmp_path / "db"), provider)) as client:
+        assert client.get("/").text == "<h1>Test</h1>"
+        assert client.get("/assets/app.js").text == "// frontend asset"
         assert client.get("/api/health").json()["api_key_configured"] is False
         assert client.post("/api/debates", json=config().model_dump(mode="json")).status_code == 409
         assert client.get("/api/debates").json() == []

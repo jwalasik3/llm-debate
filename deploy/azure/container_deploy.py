@@ -40,6 +40,7 @@ def configuration(current, image, account_url, runtime_id, runtime_client_id, pr
             "resources": {"cpu": 0.25, "memory": "0.5Gi"},
             "env": [
                 {"name": "AUTH_REQUIRED", "value": "true"},
+                {"name": "FRONTEND_DIST", "value": "/app/static"},
                 {"name": "APP_USERNAME", "secretRef": "app-username"},
                 {"name": "APP_PASSWORD", "secretRef": "app-password"},
                 *[

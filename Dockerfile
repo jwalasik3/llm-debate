@@ -6,7 +6,7 @@ COPY frontend/ ./
 RUN npm run build
 
 FROM python:3.13-slim-bookworm AS app
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 AUTH_REQUIRED=true
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 AUTH_REQUIRED=true FRONTEND_DIST=/app/static
 WORKDIR /app
 COPY backend/pyproject.toml backend/requirements.lock ./
 RUN pip install --no-cache-dir -r requirements.lock
